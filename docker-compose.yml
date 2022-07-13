@@ -1,0 +1,15 @@
+version: '3'
+services:
+  url_shortener:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        project: ./url_shortener
+    restart: on-failure
+    ports: 
+      - "8081:8080" #router forwards http port to :8081
+    environment:
+      - hostname=localhost:8081
+
+  
