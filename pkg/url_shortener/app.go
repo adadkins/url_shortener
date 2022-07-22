@@ -2,6 +2,7 @@ package url_shortener
 
 import (
 	"crypto/sha1"
+	"database/sql"
 	"fmt"
 	"html/template"
 	"log"
@@ -9,27 +10,27 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	_ "github.com/lib/pq"
 )
 
 type App struct {
-	mappings map[string]string
 	hostname string
+	db       *sql.DB
 }
 
-func NewApp(hostname string) App {
+func NewApp(hostname string, db *sql.DB) App {
 	a := App{
-		mappings: make(map[string]string),
 		hostname: hostname,
+		db:       db,
 	}
-
 	return a
 }
 
 func (a *App) Start() error {
 	rtr := mux.NewRouter()
-	rtr.HandleFunc("/{.}", a.RedirectHandler)
-	rtr.HandleFunc("/", a.CreateShortURLHandler)
-	rtr.HandleFunc("/create/", a.SaveHandler)
+	rtr.HandleFunc("/", a.CreateShortURLHandler).Methods("GET")
+	rtr.HandleFunc("/{^.*[a-zA-Z0-9]+.*$}", a.RedirectHandler).Methods("GET")
+	rtr.HandleFunc("/", a.SaveHandler).Methods("POST")
 
 	err := http.ListenAndServe(":8080", rtr)
 	return err
@@ -40,20 +41,22 @@ func (a *App) CreateShortURLHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println(err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
 	t.Execute(w, nil)
 }
 
 func (a *App) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.Split(r.URL.Path, "/")
-
-	if val, ok := a.mappings[path[len(path)-1]]; ok {
-		http.Redirect(w, r, val, http.StatusSeeOther)
+	link := a.queryHash(path[len(path)-1])
+	if link != "" {
+		http.Redirect(w, r, link, http.StatusSeeOther)
 		return
 	}
 
 	t, err := template.ParseFiles("../pkg/url_shortener/link_doesnt_exist.html")
 	if err != nil {
+		log.Println(err)
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("Resource Not Found"))
 	}
@@ -67,18 +70,21 @@ func (a *App) SaveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//need some logic to test if has http/https and if not, add it to the stored url
+	//TODO theres a bug here.
 	if body[0:4] != "http" {
 		body = fmt.Sprintf("http://%v", body)
 	}
-
 	hashedURL := Hashstr(body)
-
 	//check for collision
+	//TODO dont create a new hash if the link is the same
 	i := 5
 	for {
-		existing := a.mappings[hashedURL[:i]]
+		existing := a.queryHash(hashedURL[:i])
 		if existing == "" {
-			a.mappings[hashedURL[:i]] = body
+			err := a.insertHash(hashedURL[:i], body)
+			if err != nil {
+				log.Println(err)
+			}
 			break
 		}
 		i++
@@ -94,4 +100,27 @@ func Hashstr(Txt string) string {
 	bs := h.Sum(nil)
 	sh := string(fmt.Sprintf("%x\n", bs))
 	return sh
+}
+
+func (a *App) queryHash(hash string) string {
+	var link string
+	queryStatement := "SELECT link from public.shorturl where hashcode = $1"
+	if err := a.db.QueryRow(queryStatement, hash).Scan(&link); err != nil {
+		if err != nil || err == sql.ErrNoRows {
+			log.Println(err)
+			return ""
+		}
+	}
+	return link
+}
+
+func (a *App) insertHash(hash, link string) error {
+	queryStatement := "INSERT into public.shorturl (hashcode, link) values($1, $2);"
+	if _, err := a.db.Exec(queryStatement, hash, link); err != nil {
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+	}
+	return nil
 }

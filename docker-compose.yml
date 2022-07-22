@@ -11,5 +11,33 @@ services:
       - "8081:8080" #router forwards http port to :8081
     environment:
       - hostname=localhost:8081
+      - PG_USER=postgres
+      - PG_PASSWORD=postgres
+      - PG_HOST=db
+      - PG_PORT=5432
+      - PG_DB_NAME=postgres
+    depends_on:
+      - db
+    networks:
+      - fullstack   
+  db:
+    image: postgres:14.1-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - '5432:5432'
+    volumes: 
+      - db:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/create_tables.sql  
+    networks:
+      - fullstack
 
-  
+volumes:
+  db:
+    driver: local
+
+networks:
+  fullstack:
+    driver: bridge
