@@ -8,7 +8,7 @@ TODO's:
 - implment cloud flare tunneling rather than have an open port 80/443
 - can we go embed the html files?
 - docker file just needs the binary, implement a 2 stage process to shrink the final image
-- logic to check if http needs improved
+- logic to check if http checking needs improved
 - add logic so we dont save duplicate urls with different hashs
 - tests
 - can the makefile be cleaned up/modified to be more generic

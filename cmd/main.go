@@ -10,7 +10,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var mappings = make(map[string]string)
 var hostName string
 
 func main() {
