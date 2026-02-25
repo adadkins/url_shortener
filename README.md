@@ -1,8 +1,6 @@
 # url_shortener
 Tiny URL clone
 
-http://shorturl.adadkins.com
-
 TODO's:
 - implement logger such as logurus
 - implment cloud flare tunneling rather than have an open port 80/443
